@@ -170,6 +170,18 @@ def parse_args_onnx(parser):
         help="PyTorch-only argument. Disables PyTorch ONNX export constant folding.",
     )
 
+    optional_group.add_argument(
+        "--use-dynamo",
+        action="store_true",
+        help="Use dynamo instead of torchscript for onnx model export.",
+    )
+
+    optional_group.add_argument(
+        "--assert-ort-output",
+        action="store_true",
+        help="Run torch and ORT model inference and compare outputs.",
+    )
+
     input_group = parser.add_argument_group(
         "Input shapes (if necessary, this allows to override the shapes of the input given to the ONNX exporter, that requires an example input)."
     )
