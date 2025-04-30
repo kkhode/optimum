@@ -462,6 +462,78 @@ class ValidationProcess(mp.Process):
         return self._exception
 
 
+import torch.nn.functional
+class RandomSDPA(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        query, key, value = x
+        return torch.nn.functional.scaled_dot_product_attention(query, key, value)
+
+
+class Polynomial3(torch.nn.Module):
+    def __init__(self):
+        """
+        In the constructor we instantiate four parameters and assign them as
+        member parameters.
+        """
+        super().__init__()
+        self.a = torch.nn.Parameter(torch.randn(()))
+        self.b = torch.nn.Parameter(torch.randn(()))
+        self.c = torch.nn.Parameter(torch.randn(()))
+        self.d = torch.nn.Parameter(torch.randn(()))
+
+    def forward(self, x):
+        """
+        In the forward function we accept a Tensor of input data and we must return
+        a Tensor of output data. We can use Modules defined in the constructor as
+        well as arbitrary operators on Tensors.
+        """
+        return self.a + self.b * x + self.c * x ** 2 + self.d * x ** 3
+
+    def string(self):
+        """
+        Just like any class in Python, you can also define custom method on PyTorch modules
+        """
+        return f'y = {self.a.item()} + {self.b.item()} x + {self.c.item()} x^2 + {self.d.item()} x^3'
+
+
+from functorch.experimental.control_flow import cond
+class MySubModule(torch.nn.Module):
+    def foo(self, x):
+        return x.cos()
+
+    def forward(self, x):
+        return self.foo(x)
+
+class CondBranchClassMethod(torch.nn.Module):
+    """
+    The branch functions (`true_fn` and `false_fn`) passed to cond() must follow these rules:
+      - both branches must take the same args, which must also match the branch args passed to cond.
+      - both branches must return a single tensor
+      - returned tensor must have the same tensor metadata, e.g. shape and dtype
+      - branch function can be free function, nested function, lambda, class methods
+      - branch function can not have closure variables
+      - no inplace mutations on inputs or global variables
+
+
+    This example demonstrates using class method in cond().
+
+    NOTE: If the `pred` is test on a dim with batch size < 2, it will be specialized.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.subm = MySubModule()
+
+    def bar(self, x):
+        return x.sin()
+
+    def forward(self, x):
+        return cond(x.shape[0] <= 2, self.subm.forward, self.bar, [x])
+
+
 def export_pytorch(
     model: Union["PreTrainedModel", "ModelMixin"],
     config: OnnxConfig,
@@ -505,7 +577,7 @@ def export_pytorch(
     Returns:
         `Tuple[List[str], List[str]]`: A tuple with an ordered list of the model's inputs, and the named outputs from
         the ONNX configuration.
-    """
+    """    
     from torch.onnx import export as onnx_export
     from torch.utils._pytree import tree_map
 
@@ -562,6 +634,31 @@ def export_pytorch(
             else:
                 dynamix_axes = dict(chain(inputs.items(), config.outputs.items()))
 
+            model = RandomSDPA()
+            batch_size = 2
+            seq_len = 3
+            embed_dim = 8
+            num_heads = 2
+            dummy_inputs = (
+                torch.randn(batch_size, num_heads, seq_len, embed_dim // num_heads, device=device),
+                torch.randn(batch_size, num_heads, seq_len, embed_dim // num_heads, device=device),
+                torch.randn(batch_size, num_heads, seq_len, embed_dim // num_heads, device=device)
+            )
+
+            # model = Polynomial3()
+            # dummy_inputs = torch.linspace(-3.14, 3.14, 2000)
+            
+            # model = CondBranchClassMethod()
+            # dummy_inputs = torch.randn(3)
+
+            # input_names = {0: 'query', 1: 'key', 2: 'value'}
+            # output_names = {0: 'attn_output'}
+            # dynamix_axes = {
+            #     'query': {0: 'batch_size', 1: 'num_heads', 2: 'seq_length', 3: 'embedding_dim'},
+            #     'key': {0: 'batch_size', 1: 'num_heads', 2: 'seq_length', 3: 'embedding_dim'},
+            #     'value': {0: 'batch_size', 1: 'num_heads', 2: 'seq_length', 3: 'embedding_dim'},
+            # }
+            
             # Export can work with named args but the dict containing named args has to be the last element of the args
             # tuple.
             if use_dynamo:
@@ -569,11 +666,11 @@ def export_pytorch(
                     model,
                     (dummy_inputs,),
                     f=output.as_posix(),
-                    input_names=input_names,
-                    output_names=output_names,
-                    dynamic_shape=dynamix_axes,
+                    # input_names=input_names,
+                    # output_names=output_names,
+                    # dynamic_shape=dynamix_axes,
                     do_constant_folding=do_constant_folding,
-                    opset_version=opset,
+                    opset_version=23,
                     dynamo=True,
                     report=True
                 )
@@ -582,11 +679,11 @@ def export_pytorch(
                     model,
                     (dummy_inputs,),
                     f=output.as_posix(),
-                    input_names=input_names,
-                    output_names=output_names,
-                    dynamic_axes=dynamix_axes,
+                    # input_names=input_names,
+                    # output_names=output_names,
+                    # dynamic_axes=dynamix_axes,
                     do_constant_folding=do_constant_folding,
-                    opset_version=opset,
+                    opset_version=20,
                     report=True
                 )
 
