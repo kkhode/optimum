@@ -24,8 +24,8 @@ from transformers import AutoConfig, AutoTokenizer
 from transformers.utils import is_torch_available
 
 from ...commands.export.onnx import parse_args_onnx
-from ...utils import DEFAULT_DUMMY_SHAPES, logging
 from ...utils.import_utils import is_transformers_version
+from ...utils import DEFAULT_DUMMY_SHAPES, logging
 from ...utils.save_utils import maybe_load_preprocessors
 from ..tasks import TasksManager
 from ..utils import DisableCompileContextManager
@@ -78,6 +78,9 @@ def main_export(
     legacy: bool = False,
     no_dynamic_axes: bool = False,
     do_constant_folding: bool = True,
+    use_dynamo: bool = False,
+    verify_accuracy: bool = False,
+    debug_reports: bool = False,
     **kwargs_shapes,
 ):
     """
@@ -391,6 +394,9 @@ def main_export(
         task=task,
         use_subprocess=use_subprocess,
         do_constant_folding=do_constant_folding,
+        use_dynamo=use_dynamo,
+        verify_accuracy=verify_accuracy,
+        debug_reports=debug_reports,
         **kwargs_shapes,
     )
 
@@ -427,6 +433,9 @@ def main():
         library_name=args.library_name,
         legacy=args.legacy,
         do_constant_folding=not args.no_constant_folding,
+        use_dynamo=args.use_dynamo,
+        verify_accuracy=args.verify_accuracy,
+        debug_reports=args.debug_reports,
         **input_shapes,
     )
 
